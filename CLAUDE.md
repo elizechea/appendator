@@ -29,7 +29,8 @@ algo común, mira cómo está allí.
   ocupa ~90 KB.
 - La salida se escribe en `.part` y se renombra al final; error o cancelación no
   dejan PDF a medias.
-- Licencia AGPL-3.0 por PyMuPDF.
+- Licencia: código propio MIT; los ejecutables son AGPL-3.0 por PyMuPDF. No añadas
+  dependencias GPL/AGPL nuevas ni código copiado de PyMuPDF sin revisarlo.
 
 ## Convenciones
 

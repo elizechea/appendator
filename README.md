@@ -131,5 +131,15 @@ Los registros de errores están en `%LOCALAPPDATA%\Appendator\appendator.log`
 
 ## Licencia
 
-[AGPL-3.0](LICENSE), la misma que [PyMuPDF](https://pymupdf.readthedocs.io/), que
-usa para generar y recomprimir páginas.
+El código de este repositorio es [MIT](LICENSE): úsalo, modifícalo y redistribúyelo
+como quieras.
+
+Los **ejecutables** publicados incluyen [PyMuPDF](https://pymupdf.readthedocs.io/),
+que es [AGPL-3.0](LICENSE.AGPL-3.0); por eso cada ejecutable, como obra combinada,
+se distribuye bajo AGPL-3.0 (su código fuente es este repositorio). Si reutilizas el
+código sin PyMuPDF, solo aplica la MIT.
+
+Resto de dependencias empaquetadas: pikepdf (MPL-2.0), qpdf (Apache-2.0),
+markdown-it-py y mdurl (MIT), Pillow (MIT-CMU), lxml (BSD-3-Clause), windnd (MIT,
+solo Windows) y el cargador de PyInstaller (GPL-2.0 con excepción que permite
+distribuir el ejecutable bajo cualquier licencia).
