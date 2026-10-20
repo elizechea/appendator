@@ -1,0 +1,177 @@
+name: Build
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Versión a publicar como release (p. ej. v1.1.0); vacío = solo compilar"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows (.exe)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-build.txt
+
+      - name: Tests
+        run: python -m pytest -q tests
+
+      - name: Compilar Appendator.exe
+        run: pyinstaller --noconfirm --clean Appendator.spec
+
+      - name: Probar el .exe (bibliotecas + combinación completa)
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath dist\Appendator.exe `
+                -ArgumentList "--self-test","--report","selftest.txt" -Wait -PassThru
+          Get-Content selftest.txt
+          if ($p.ExitCode -ne 0) { throw "El autotest del ejecutable ha fallado ($($p.ExitCode))" }
+          "Tamaño: {0:N0} MB" -f ((Get-Item dist\Appendator.exe).Length / 1MB)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Appendator-windows
+          path: dist/Appendator.exe
+          if-no-files-found: error
+
+  macos:
+    name: macOS Apple Silicon (.dmg)
+    runs-on: macos-latest  # arm64 (chips M)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-build.txt
+
+      - name: Tests
+        run: python -m pytest -q tests
+
+      - name: Compilar Appendator.app
+        run: |
+          pyinstaller --noconfirm --clean Appendator.spec
+          # Firma ad hoc de todo el paquete (obligatoria para ejecutar en arm64).
+          codesign --force --deep --sign - dist/Appendator.app
+          codesign --verify --deep --strict dist/Appendator.app
+          file dist/Appendator.app/Contents/MacOS/Appendator
+
+      - name: Probar la app (bibliotecas + combinación completa)
+        run: |
+          dist/Appendator.app/Contents/MacOS/Appendator --self-test --report selftest.txt \
+            || { cat selftest.txt; exit 1; }
+          cat selftest.txt
+
+      - name: Crear Appendator-macOS.dmg
+        run: |
+          mkdir -p dmg
+          cp -R dist/Appendator.app dmg/
+          ln -s /Applications dmg/Aplicaciones
+          hdiutil create -volname Appendator -srcfolder dmg -ov -format UDZO \
+            dist/Appendator-macOS.dmg
+          du -h dist/Appendator-macOS.dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Appendator-macOS
+          path: dist/Appendator-macOS.dmg
+          if-no-files-found: error
+
+  linux:
+    name: Linux x86_64 (.tar.gz)
+    # La distribución más antigua disponible: el ejecutable exige una glibc igual o
+    # más nueva que la de compilación (2.35).
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: requirements*.txt
+
+      - name: Compilar Appendator (uv + tests + PyInstaller)
+        run: ./build_linux.sh
+
+      - name: Probar el ejecutable (bibliotecas + ventana Tk + combinación completa)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb
+          xvfb-run -a dist/Appendator --self-test --report selftest.txt \
+            || { cat selftest.txt; exit 1; }
+          cat selftest.txt
+          du -h dist/Appendator-linux-x86_64.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Appendator-linux
+          path: dist/Appendator-linux-x86_64.tar.gz
+          if-no-files-found: error
+
+  fedora:
+    name: Probar en Fedora (ejecutable de Linux)
+    needs: linux
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Appendator-linux
+
+      - name: Probar el ejecutable (bibliotecas + ventana Tk + combinación completa)
+        run: |
+          cat /etc/fedora-release
+          dnf install -y -q xorg-x11-server-Xvfb
+          tar -xzf Appendator-linux-x86_64.tar.gz
+          Xvfb :99 & sleep 2
+          DISPLAY=:99 ./Appendator --self-test --report selftest.txt \
+            || { cat selftest.txt; exit 1; }
+          cat selftest.txt
+
+  release:
+    name: Publicar release
+    needs: [windows, macos, linux, fedora]
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release != '')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          # Con workflow_dispatch la etiqueta se crea sobre el commit compilado.
+          tag_name: ${{ inputs.release || github.ref_name }}
+          name: Appendator ${{ inputs.release || github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          files: |
+            artifacts/Appendator.exe
+            artifacts/Appendator-macOS.dmg
+            artifacts/Appendator-linux-x86_64.tar.gz

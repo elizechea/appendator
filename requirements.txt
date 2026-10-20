@@ -1,0 +1,5 @@
+# PyMuPDF 2.x arrastra onnxruntime y numpy (pymupdf4llm): no hacen falta aquí.
+pymupdf==1.28.2
+pikepdf==10.17.0
+markdown-it-py==4.2.0
+windnd==1.0.7; sys_platform == "win32"
