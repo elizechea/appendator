@@ -49,6 +49,8 @@ jobs:
           "Tamaño: {0:N0} MB" -f ((Get-Item dist\Appendator.exe).Length / 1MB)
 
       - name: Probar la autoactualización (sobre una copia)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
           New-Item -ItemType Directory upd | Out-Null
@@ -99,6 +101,8 @@ jobs:
           cat selftest.txt
 
       - name: Probar la autoactualización (sobre una copia)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           mkdir upd && cp -R dist/Appendator.app upd/
           upd/Appendator.app/Contents/MacOS/Appendator --self-test --update --report update.txt \
@@ -145,6 +149,8 @@ jobs:
           du -h dist/Appendator-linux-x86_64.tar.gz
 
       - name: Probar la autoactualización (sobre una copia)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           mkdir upd && cp dist/Appendator upd/
           xvfb-run -a upd/Appendator --self-test --update --report update.txt \

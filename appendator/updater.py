@@ -63,9 +63,10 @@ def can_update() -> bool:
     return bool(getattr(sys, "frozen", False))
 
 
-def _get(url: str, timeout: float):
+def _get(url: str, timeout: float, headers: dict[str, str] | None = None):
     return urlopen(Request(url, headers={"User-Agent": APP_NAME,
-                                         "Accept": "application/vnd.github+json"}),
+                                         "Accept": "application/vnd.github+json",
+                                         **(headers or {})}),
                    timeout=timeout, context=_SSL)
 
 
@@ -86,7 +87,10 @@ def parse_release(data: dict, current: str = __version__) -> Update | None:
 
 
 def check(current: str = __version__) -> Update | None:
-    with _get(LATEST_URL, 10) as response:
+    # Sin autenticar, la API admite 60 consultas por hora e IP; en la CI (IP compartida)
+    # se usa GITHUB_TOKEN. Solo va a la API, nunca a la URL de descarga.
+    token = os.environ.get("GITHUB_TOKEN")
+    with _get(LATEST_URL, 10, {"Authorization": f"Bearer {token}"} if token else None) as response:
         return parse_release(json.load(response), current)
 
 
