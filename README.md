@@ -3,7 +3,7 @@
 Aplicación de escritorio para **Windows** (un único `Appendator.exe`), **macOS con
 chip Apple M1/M2/M3/M4…** (`Appendator.app`, macOS 13 Ventura o posterior) y **Linux
 x86_64** (un único ejecutable `Appendator`) que une varios **PDF** y **Markdown**
-en un único PDF y lo guarda en la carpeta **Descargas**.
+e **imágenes** en un único PDF y lo guarda en la carpeta **Descargas**.
 
 Todo el proceso ocurre en el propio equipo: los archivos no se envían a ningún servidor.
 
@@ -12,6 +12,11 @@ Todo el proceso ocurre en el propio equipo: los archivos no se envían a ningún
   usa unos 100 MB de RAM).
 - **Markdown formateado**: los `.md` se convierten a PDF A4 con títulos, negritas,
   listas, tablas, bloques de código, citas e imágenes (rutas relativas al `.md`).
+- **Imágenes como páginas**: PNG, JPG, GIF, BMP, TIFF (una página por fotograma),
+  SVG, WebP, AVIF, JPEG 2000, PSD, ICO, TGA y otros formatos habituales (no HEIC).
+  Cada imagen ocupa una página A4 en vertical u horizontal según su forma,
+  respetando el giro de las fotos del móvil. Las de mapa de bits se reducen para
+  caber pero nunca se amplían; los SVG se ajustan a la página.
 - **Separadores para IA** (opcional): antes de cada archivo se añade una página con
   su nombre y «Archivo N de M», de modo que una IA que lea el PDF detecta fácilmente
   dónde empieza cada documento.
@@ -68,7 +73,8 @@ Debian 12, Fedora 36 o más recientes) sin instalar nada. La CI lo prueba en Ubu
 ## Uso
 
 1. Añade archivos con **Añadir archivos…** (en Windows también arrastrándolos a la
-   ventana, incluso carpetas completas: se añaden sus PDF y `.md` en orden alfabético).
+   ventana, incluso carpetas completas: se añaden sus PDF, `.md` e imágenes en orden
+   alfabético).
 2. Ordénalos con **Subir** y **Bajar**: el PDF final sigue el orden de la lista.
 3. Elige las opciones:
    - **Página con el nombre del archivo antes de cada uno**.
@@ -120,7 +126,7 @@ Autotest del ejecutable (lo usa la CI): `Appendator --self-test [--report inform
 
 - `main.py` — punto de entrada.
 - `appendator/gui.py` — interfaz (tkinter).
-- `appendator/merge.py` — conversión de Markdown, separadores, compresión y unión.
+- `appendator/merge.py` — conversión de Markdown e imágenes, separadores, compresión y unión.
 - `appendator/paths.py` — carpeta Descargas real, ajustes y registros.
 - `appendator/selftest.py` — autotest del ejecutable.
 - `Appendator.spec` — configuración de PyInstaller.

@@ -3,7 +3,7 @@
     Appendator --self-test [--report ruta.txt]
 
 Verifica que PyMuPDF, pikepdf y Tk están empaquetados y funcionan, y combina de
-principio a fin un PDF con imagen y un Markdown, con separadores y compresión.
+principio a fin un PDF, un Markdown, un WebP y un SVG, con separadores y compresión.
 """
 
 from __future__ import annotations
@@ -51,10 +51,17 @@ def run_self_test(argv: list[str]) -> int:
             doc.save(pdf)
             md = tmp_path / "notas.md"
             md.write_text("# Notas\n\n| A | B |\n|---|---|\n| ñ | 日本 |\n", "utf-8")
+            from PIL import Image
+            webp = tmp_path / "foto.webp"
+            Image.new("RGB", (640, 480), (200, 60, 60)).save(webp)
+            svg = tmp_path / "dibujo.svg"
+            svg.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200">'
+                           '<text x="10" y="100">Hola SVG</text></svg>', "utf-8")
             out = tmp_path / "out.pdf"
-            pages = merge([pdf, md], out, Options(separators=True, compress=True, quality=50))
+            pages = merge([pdf, md, webp, svg], out,
+                          Options(separators=True, compress=True, quality=50))
             text = "".join(p.get_text() for p in pymupdf.open(out))
-            if pages != 4 or "notas.md" not in text or "Notas" not in text:
+            if pages != 8 or "notas.md" not in text or "Notas" not in text or "Hola SVG" not in text:
                 raise RuntimeError(f"{pages} páginas, texto: {text!r}")
             return f"{pages} páginas, {out.stat().st_size} bytes"
 
@@ -78,7 +85,7 @@ def run_self_test(argv: list[str]) -> int:
             return str(downloads_dir())
 
         check("bibliotecas", versions)
-        check("combinar PDF + Markdown con separadores y compresión", combine)
+        check("combinar PDF + Markdown + WebP + SVG con separadores y compresión", combine)
         check("tkinter", tk)
         check("carpeta Descargas", downloads)
 

@@ -90,3 +90,26 @@ def test_output_name_does_not_overwrite(tmp_path):
     assert first.name == "Informe_ final - combinado.pdf"
     first.write_bytes(b"")
     assert output_path_for(Path("Informe: final.md"), tmp_path).name == "Informe_ final - combinado (2).pdf"
+
+
+def test_images_become_pages(tmp_path):
+    from PIL import Image
+
+    Image.new("RGB", (3000, 1000), (200, 60, 60)).save(tmp_path / "ancha.png")
+    Image.new("RGB", (40, 60), (0, 0, 255)).save(tmp_path / "icono.webp")  # vía Pillow
+    (tmp_path / "dibujo.svg").write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200">'
+        '<text x="10" y="100">Hola SVG</text></svg>', "utf-8")
+    frames = [Image.new("RGB", (100, 100), c) for c in ((255, 0, 0), (0, 255, 0))]
+    frames[0].save(tmp_path / "multi.tiff", save_all=True, append_images=frames[1:])
+    files = [tmp_path / n for n in ("ancha.png", "icono.webp", "dibujo.svg", "multi.tiff")]
+    out = tmp_path / "out.pdf"
+    assert merge(files, out, Options(separators=True)) == 9  # 4 separadores + 5 páginas
+    with pymupdf.open(out) as doc:
+        ancha, icono, svg = doc[1], doc[3], doc[5]
+        assert ancha.rect.width > ancha.rect.height  # imagen apaisada → A4 horizontal
+        assert "Hola SVG" in svg.get_text()
+        span = svg.get_text("dict")["blocks"][0]["lines"][0]["spans"][0]
+        assert span["size"] > 20  # el SVG (vectorial) sí se amplía: 12 pt → ~29 pt
+        # El icono no se amplía: ocupa sus 40x60 px (30x45 pt), no la página entera.
+        assert pymupdf.Rect(icono.get_image_info()[0]["bbox"]).width < 100

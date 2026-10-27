@@ -1,4 +1,4 @@
-"""Combinación de PDF y Markdown en un único PDF.
+"""Combinación de PDF, Markdown e imágenes en un único PDF.
 
 pikepdf (qpdf) une las páginas sin cargar los archivos en memoria: los flujos se
 copian desde los originales al guardar, así que no hay límite de tamaño práctico.
@@ -18,14 +18,24 @@ from typing import Callable
 
 import pikepdf
 import pymupdf
+from PIL import Image, ImageOps
 from markdown_it import MarkdownIt
 
 PDF_EXTENSIONS = (".pdf",)
 MD_EXTENSIONS = (".md", ".markdown")
-SUPPORTED_EXTENSIONS = PDF_EXTENSIONS + MD_EXTENSIONS
+# MuPDF abre estas directamente (SVG incluido) y respeta la orientación EXIF.
+MUPDF_IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".jpe", ".jfif", ".gif", ".bmp",
+                          ".tif", ".tiff", ".pnm", ".ppm", ".pgm", ".pbm", ".pam",
+                          ".jp2", ".jpx", ".j2k", ".jxr", ".psd", ".svg")
+# Estas no las abre MuPDF: Pillow (ya empaquetado con pikepdf) las pasa a PNG.
+PILLOW_IMAGE_EXTENSIONS = (".webp", ".avif", ".ico", ".cur", ".tga", ".pcx", ".qoi",
+                           ".icns", ".dds", ".sgi", ".xbm", ".xpm")
+IMAGE_EXTENSIONS = MUPDF_IMAGE_EXTENSIONS + PILLOW_IMAGE_EXTENSIONS
+SUPPORTED_EXTENSIONS = PDF_EXTENSIONS + MD_EXTENSIONS + IMAGE_EXTENSIONS
 
 PAGE = pymupdf.paper_rect("a4")
-CONTENT = PAGE + (56, 56, -56, -56)  # márgenes de 2 cm
+MARGINS = (56, 56, -56, -56)  # 2 cm
+CONTENT = PAGE + MARGINS
 CODE_COLUMNS = 80  # caracteres de 9 pt monoespaciados que caben en CONTENT
 
 CSS = """
@@ -103,6 +113,35 @@ def markdown_to_pdf(source: Path, target: Path) -> None:
     html_to_pdf(body, target, source.parent)
 
 
+def image_to_pdf(source: Path, target: Path) -> None:
+    """Una página A4 por imagen (o por fotograma de un TIFF de varias páginas).
+
+    La orientación sigue a la imagen y se ajusta a los márgenes. Las de mapa de bits
+    no se amplían, para que un icono no se convierta en una mancha borrosa.
+    """
+    if source.suffix.lower() in PILLOW_IMAGE_EXTENSIONS:
+        buffer = io.BytesIO()
+        with Image.open(source) as im:
+            ImageOps.exif_transpose(im).convert("RGBA").save(buffer, "PNG")
+        image = pymupdf.open("png", buffer.getvalue())
+    else:
+        image = pymupdf.open(source)
+    vector = source.suffix.lower() == ".svg"
+    with image, pymupdf.open("pdf", image.convert_to_pdf()) as src, pymupdf.open() as out:
+        for page in src:
+            r = page.rect
+            width, height = (PAGE.height, PAGE.width) if r.width > r.height else (PAGE.width, PAGE.height)
+            new = out.new_page(width=width, height=height)
+            area = new.rect + MARGINS
+            scale = min(area.width / r.width, area.height / r.height)
+            if not vector:
+                scale = min(scale, 1)
+            w, h = r.width * scale, r.height * scale
+            x, y = area.x0 + (area.width - w) / 2, area.y0 + (area.height - h) / 2
+            new.show_pdf_page(pymupdf.Rect(x, y, x + w, y + h), src, page.number)
+        out.save(target, garbage=3, deflate=True)
+
+
 def separator_pdf(name: str, index: int, total: int, target: Path) -> None:
     html_to_pdf(f"<div class='sep'><h1>{html.escape(name)}</h1>"
                 f"<p>Archivo {index} de {total}</p></div>", target)
@@ -147,6 +186,9 @@ def merge(files: list[Path], output: Path, options: Options,
                     if src.suffix.lower() in MD_EXTENSIONS:
                         pdf = tmp_dir / f"{i}-markdown.pdf"
                         markdown_to_pdf(src, pdf)
+                    elif src.suffix.lower() in IMAGE_EXTENSIONS:
+                        pdf = tmp_dir / f"{i}-imagen.pdf"
+                        image_to_pdf(src, pdf)
                     if options.compress:
                         compressed = tmp_dir / f"{i}-comprimido.pdf"
                         compress_images(pdf, compressed, options.quality)

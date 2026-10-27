@@ -11,7 +11,7 @@ from pathlib import Path
 from tkinter import filedialog, font as tkfont, messagebox, ttk
 
 from . import APP_NAME, __version__
-from .merge import MD_EXTENSIONS, PDF_EXTENSIONS, SUPPORTED_EXTENSIONS, Cancelled, Options, merge, target_dpi
+from .merge import IMAGE_EXTENSIONS, MD_EXTENSIONS, PDF_EXTENSIONS, SUPPORTED_EXTENSIONS, Cancelled, Options, merge, target_dpi
 from .paths import downloads_dir, load_settings, open_in_explorer, output_path_for, save_settings
 
 log = logging.getLogger(__name__)
@@ -91,7 +91,7 @@ class App:
         ttk.Label(header, text="📎  " + APP_NAME, style="Title.TLabel").pack(anchor="w")
         ttk.Label(
             header,
-            text="Une varios PDF y Markdown en un único PDF, en tu propio equipo "
+            text="Une PDF, Markdown e imágenes en un único PDF, en tu propio equipo "
                  "y sin enviar nada a Internet.",
             style="Subtitle.TLabel",
         ).pack(anchor="w")
@@ -132,7 +132,8 @@ class App:
             self.list_buttons.append(button)
         self.files_hint = ttk.Label(
             files, style="Hint.TLabel",
-            text="Añade archivos PDF o Markdown (.md). Sin límite de tamaño.")
+            text="Añade PDF, Markdown (.md) o imágenes (PNG, JPG, SVG, WebP…). "
+                 "Sin límite de tamaño.")
         self.files_hint.grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
         # 2. Opciones -------------------------------------------------------
@@ -213,7 +214,7 @@ class App:
             windnd.hook_dropfiles(self.root, func=dropped, force_unicode=True)
             self.files_hint.configure(
                 text="Arrastra aquí archivos o carpetas, o pulsa «Añadir archivos…» "
-                     "(PDF y Markdown). Sin límite de tamaño.")
+                     "(PDF, Markdown e imágenes). Sin límite de tamaño.")
         except Exception:
             log.info("Arrastrar y soltar no disponible", exc_info=True)
 
@@ -223,12 +224,13 @@ class App:
             return
         selected = filedialog.askopenfilenames(
             parent=self.root,
-            title="Selecciona PDF o Markdown",
+            title="Selecciona PDF, Markdown o imágenes",
             initialdir=self.settings.get("last_dir") or str(Path.home()),
             filetypes=[
-                ("PDF y Markdown", " ".join("*" + e for e in SUPPORTED_EXTENSIONS)),
+                ("PDF, Markdown e imágenes", " ".join("*" + e for e in SUPPORTED_EXTENSIONS)),
                 ("PDF", " ".join("*" + e for e in PDF_EXTENSIONS)),
                 ("Markdown", " ".join("*" + e for e in MD_EXTENSIONS)),
+                ("Imágenes", " ".join("*" + e for e in IMAGE_EXTENSIONS)),
             ],
         )
         if selected:
