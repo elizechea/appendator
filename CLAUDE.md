@@ -32,6 +32,13 @@ algo común, mira cómo está allí.
   ocupa ~90 KB.
 - La salida se escribe en `.part` y se renombra al final; error o cancelación no
   dejan PDF a medias.
+- Autoactualización (`updater.py`): solo acepta assets de
+  `github.com/elizechea/appendator/releases/download/` con `digest` SHA-256, y lo
+  verifica. Windows renombra el `.exe` en uso a `.old.exe` (se borra al arrancar);
+  macOS cambia el `.app` con un script que espera a que la app se cierre. El nombre
+  temporal debe acabar en `.app` (si no, PyInstaller no encuentra `Frameworks`).
+  Los nombres de los assets de la release (`ASSET`) no se pueden cambiar sin romper
+  la actualización de las versiones ya instaladas. TLS con certifi.
 - Licencia: código propio MIT; los ejecutables son AGPL-3.0 por PyMuPDF. No añadas
   dependencias GPL/AGPL nuevas ni código copiado de PyMuPDF sin revisarlo.
 

@@ -7,10 +7,11 @@ import queue
 import sys
 import threading
 import tkinter as tk
+import webbrowser
 from pathlib import Path
 from tkinter import filedialog, font as tkfont, messagebox, ttk
 
-from . import APP_NAME, __version__
+from . import APP_NAME, __version__, updater
 from .merge import IMAGE_EXTENSIONS, MD_EXTENSIONS, PDF_EXTENSIONS, SUPPORTED_EXTENSIONS, Cancelled, Options, merge, target_dpi
 from .paths import downloads_dir, load_settings, open_in_explorer, output_path_for, save_settings
 
@@ -48,6 +49,9 @@ class App:
         self.root.update_idletasks()
         self.root.minsize(self.root.winfo_reqwidth(), self.root.winfo_reqheight())
         self.root.after(100, self._poll_events)
+        updater.cleanup_previous()
+        if updater.can_update() and self.updates_var.get():
+            threading.Thread(target=self._check_updates, daemon=True).start()
 
     # ------------------------------------------------------------------ UI
     def _setup_window(self) -> None:
@@ -92,7 +96,7 @@ class App:
         ttk.Label(
             header,
             text="Une PDF, Markdown e imágenes en un único PDF, en tu propio equipo "
-                 "y sin enviar nada a Internet.",
+                 "y sin enviar tus archivos a Internet.",
             style="Subtitle.TLabel",
         ).pack(anchor="w")
 
@@ -185,6 +189,10 @@ class App:
         self.btn_open = ttk.Button(bottom, text="Abrir PDF", command=self._open_output)
         self.btn_open.pack(side="left")
         ttk.Label(bottom, text=f"v{__version__}", style="Hint.TLabel").pack(side="left", padx=10)
+        self.updates_var = tk.BooleanVar(value=self.settings.get("check_updates", True))
+        if updater.can_update():
+            ttk.Checkbutton(bottom, text="Buscar actualizaciones al abrir",
+                            variable=self.updates_var).pack(side="left")
         self.btn_start = ttk.Button(bottom, text="▶  Combinar", style="Primary.TButton",
                                     command=self._start)
         self.btn_start.pack(side="right")
@@ -315,7 +323,7 @@ class App:
                 self.events.put(("cancelled",))
             except Exception as exc:
                 log.exception("Error al combinar")
-                self.events.put(("error", str(exc) or type(exc).__name__))
+                self.events.put(("error", f"No se pudo combinar:\n\n{str(exc) or type(exc).__name__}"))
 
         self.worker = threading.Thread(target=work, daemon=True)
         self._set_running(True)
@@ -348,6 +356,8 @@ class App:
                     else:
                         self.progress["value"] = fraction * 1000
                         self.root.title(f"{fraction:.0%} · {APP_NAME}")
+                elif kind == "update_available":
+                    self._offer_update(*data)
                 else:
                     self._on_finished(kind, *data)
         except queue.Empty:
@@ -360,6 +370,20 @@ class App:
         self.progress.configure(mode="determinate")
         self.progress["value"] = 1000 if kind == "done" else 0
         self.root.title(APP_NAME)
+        if kind == "updated":
+            updater.relaunch(data[0])
+            self._save_settings()
+            self.root.destroy()
+            return
+        if kind == "update_failed":
+            self._set_running(False)
+            self.lbl_status.configure(text="No se pudo actualizar.")
+            message, page = data
+            if messagebox.askyesno(APP_NAME, f"No se pudo actualizar:\n\n{message}\n\n"
+                                   "¿Abrir la página de descarga para instalarla a mano?",
+                                   icon="warning", parent=self.root):
+                webbrowser.open(page)
+            return
         if kind == "done":
             self.output, pages = data
             self._set_running(False)
@@ -375,7 +399,48 @@ class App:
             self.lbl_status.configure(text="Cancelado. No se ha guardado nada.")
         else:
             self.lbl_status.configure(text="Error: no se ha guardado nada.")
-            messagebox.showerror(APP_NAME, f"No se pudo combinar:\n\n{data[0]}", parent=self.root)
+            messagebox.showerror(APP_NAME, data[0], parent=self.root)
+
+    # -------------------------------------------------------- actualización
+    def _check_updates(self) -> None:
+        try:
+            update = updater.check()
+        except Exception:
+            log.info("No se pudo comprobar si hay actualizaciones", exc_info=True)
+            return
+        if update:
+            self.events.put(("update_available", update))
+
+    def _offer_update(self, update: updater.Update) -> None:
+        if self.worker is not None:
+            return  # combinando: se volverá a ofrecer al abrir la próxima vez
+        notes = update.notes.strip()
+        notes = (notes[:700] + "…") if len(notes) > 700 else notes
+        if not messagebox.askyesno(
+                APP_NAME, f"Hay una versión nueva de {APP_NAME}: {update.version} "
+                          f"(tienes la {__version__}).\n\n{notes}\n\n"
+                          "¿Descargarla e instalarla ahora? La aplicación se reiniciará.",
+                parent=self.root):
+            return
+        self.cancel_event.clear()
+        self.progress["value"] = 0
+
+        def work() -> None:
+            try:
+                target = updater.current_target()
+                updater.install(update, target,
+                                lambda fraction, text: self.events.put(("progress", fraction, text)),
+                                self.cancel_event)
+                self.events.put(("updated", target))
+            except Cancelled:
+                self.events.put(("cancelled",))
+            except Exception as exc:
+                log.exception("Error al actualizar")
+                self.events.put(("update_failed", str(exc) or type(exc).__name__, update.page))
+
+        self.worker = threading.Thread(target=work, daemon=True)
+        self._set_running(True)
+        self.worker.start()
 
     def _open_output(self) -> None:
         if self.output and self.output.exists():
@@ -383,14 +448,18 @@ class App:
 
     def _on_close(self) -> None:
         if self.worker is not None and not messagebox.askyesno(
-                APP_NAME, "Hay una combinación en curso. ¿Quieres cancelarla y salir?",
+                APP_NAME, "Hay un trabajo en curso. ¿Quieres cancelarlo y salir?",
                 parent=self.root):
             return
         self.cancel_event.set()
-        self.settings.update(separators=self.separators_var.get(),
-                             compress=self.compress_var.get(), quality=self.quality_var.get())
-        save_settings(self.settings)
+        self._save_settings()
         self.root.destroy()
+
+    def _save_settings(self) -> None:
+        self.settings.update(separators=self.separators_var.get(),
+                             compress=self.compress_var.get(), quality=self.quality_var.get(),
+                             check_updates=self.updates_var.get())
+        save_settings(self.settings)
 
 
 def _human_size(size: float) -> str:

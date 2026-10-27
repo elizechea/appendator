@@ -1,14 +1,17 @@
 """Autocomprobación del ejecutable (se usa en CI para validar cada versión).
 
-    Appendator --self-test [--report ruta.txt]
+    Appendator --self-test [--update] [--report ruta.txt]
 
 Verifica que PyMuPDF, pikepdf y Tk están empaquetados y funcionan, y combina de
 principio a fin un PDF, un Markdown, un WebP y un SVG, con separadores y compresión.
+Con --update además se sustituye a sí mismo por la última release de GitHub (úsese
+sobre una copia) y arranca el autotest de la versión instalada.
 """
 
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import tempfile
 import traceback
@@ -88,6 +91,26 @@ def run_self_test(argv: list[str]) -> int:
         check("combinar PDF + Markdown + WebP + SVG con separadores y compresión", combine)
         check("tkinter", tk)
         check("carpeta Descargas", downloads)
+
+        if "--update" in argv:
+            def update():
+                import threading
+                from appendator import updater
+                release = updater.check(current="0.0.0")
+                if release is None:
+                    raise RuntimeError(f"la última release no trae {updater.ASSET} con SHA-256")
+                target = updater.current_target()
+                new = updater.install(release, target, lambda *a: None, threading.Event())
+                result = subprocess.run([str(new), "--self-test"], env=updater.launch_env(),
+                                        capture_output=True, text=True, timeout=300)
+                if sys.platform == "darwin":
+                    import shutil
+                    shutil.rmtree(updater.staging_path(target), ignore_errors=True)
+                if result.returncode != 0:
+                    raise RuntimeError(f"la versión instalada falla ({result.returncode}):\n{result.stdout}\n{result.stderr[-2000:]}")
+                return f"instalada la {release.version} y su autotest da OK"
+
+            check("actualización desde GitHub", update)
 
     text = "\n".join(lines) + f"\n\nRESULTADO: {'OK' if ok else 'FALLO'}\n"
     print(text)

@@ -48,6 +48,16 @@ jobs:
           if ($p.ExitCode -ne 0) { throw "El autotest del ejecutable ha fallado ($($p.ExitCode))" }
           "Tamaño: {0:N0} MB" -f ((Get-Item dist\Appendator.exe).Length / 1MB)
 
+      - name: Probar la autoactualización (sobre una copia)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory upd | Out-Null
+          Copy-Item dist\Appendator.exe upd\
+          $p = Start-Process -FilePath upd\Appendator.exe `
+                -ArgumentList "--self-test","--update","--report","update.txt" -Wait -PassThru
+          Get-Content update.txt
+          if ($p.ExitCode -ne 0) { throw "La autoactualización ha fallado ($($p.ExitCode))" }
+
       - uses: actions/upload-artifact@v4
         with:
           name: Appendator-windows
@@ -88,6 +98,13 @@ jobs:
             || { cat selftest.txt; exit 1; }
           cat selftest.txt
 
+      - name: Probar la autoactualización (sobre una copia)
+        run: |
+          mkdir upd && cp -R dist/Appendator.app upd/
+          upd/Appendator.app/Contents/MacOS/Appendator --self-test --update --report update.txt \
+            || { cat update.txt; exit 1; }
+          cat update.txt
+
       - name: Crear Appendator-macOS.dmg
         run: |
           mkdir -p dmg
@@ -126,6 +143,13 @@ jobs:
             || { cat selftest.txt; exit 1; }
           cat selftest.txt
           du -h dist/Appendator-linux-x86_64.tar.gz
+
+      - name: Probar la autoactualización (sobre una copia)
+        run: |
+          mkdir upd && cp dist/Appendator upd/
+          xvfb-run -a upd/Appendator --self-test --update --report update.txt \
+            || { cat update.txt; exit 1; }
+          cat update.txt
 
       - uses: actions/upload-artifact@v4
         with:

@@ -6,6 +6,7 @@ x86_64** (un único ejecutable `Appendator`) que une varios **PDF** y **Markdown
 e **imágenes** en un único PDF y lo guarda en la carpeta **Descargas**.
 
 Todo el proceso ocurre en el propio equipo: los archivos no se envían a ningún servidor.
+La única conexión es la comprobación de actualizaciones, que se puede desactivar.
 
 - **Sin límite de tamaño**: las páginas se copian de archivo a archivo con
   [qpdf](https://qpdf.readthedocs.io/) sin cargarlas en memoria (unir 1,1 GB de PDF
@@ -88,6 +89,19 @@ Debian 12, Fedora 36 o más recientes) sin instalar nada. La CI lo prueba en Ubu
 Si un archivo está dañado o protegido con contraseña, se avisa indicando cuál y no
 se guarda nada. Al cancelar tampoco queda ningún PDF a medias.
 
+## Actualizaciones
+
+Al abrirse, la app consulta en GitHub si hay una release más nueva. Si la hay,
+pregunta antes de hacer nada; al aceptar, descarga la versión de tu sistema,
+comprueba que su huella SHA-256 coincide con la que publica GitHub, la instala y se
+reinicia. Las actualizaciones no vuelven a mostrar los avisos de SmartScreen ni
+Gatekeeper de la primera instalación.
+
+- Se desactiva con la casilla **Buscar actualizaciones al abrir** (abajo a la izquierda).
+- Sin conexión no pasa nada: simplemente no se ofrece.
+- Si la app está en una carpeta donde no puedes escribir (por ejemplo `Program
+  Files` sin ser administrador), lo avisa y ofrece abrir la página de descarga.
+
 ## Descargar
 
 Las versiones publicadas están en
@@ -119,8 +133,10 @@ uv venv --python 3.12 && uv pip install -r requirements-build.txt
 .venv/bin/python main.py
 ```
 
-Autotest del ejecutable (lo usa la CI): `Appendator --self-test [--report informe.txt]`
-(en Mac: `Appendator.app/Contents/MacOS/Appendator --self-test …`).
+Autotest del ejecutable (lo usa la CI): `Appendator --self-test [--update] [--report informe.txt]`
+(en Mac: `Appendator.app/Contents/MacOS/Appendator --self-test …`). Con `--update` se
+sustituye a sí mismo por la última release y prueba la versión instalada: úsalo solo
+sobre una copia.
 
 ## Estructura
 
@@ -128,6 +144,7 @@ Autotest del ejecutable (lo usa la CI): `Appendator --self-test [--report inform
 - `appendator/gui.py` — interfaz (tkinter).
 - `appendator/merge.py` — conversión de Markdown e imágenes, separadores, compresión y unión.
 - `appendator/paths.py` — carpeta Descargas real, ajustes y registros.
+- `appendator/updater.py` — búsqueda, descarga verificada e instalación de versiones nuevas.
 - `appendator/selftest.py` — autotest del ejecutable.
 - `Appendator.spec` — configuración de PyInstaller.
 
@@ -145,7 +162,7 @@ que es [AGPL-3.0](LICENSE.AGPL-3.0); por eso cada ejecutable, como obra combinad
 se distribuye bajo AGPL-3.0 (su código fuente es este repositorio). Si reutilizas el
 código sin PyMuPDF, solo aplica la MIT.
 
-Resto de dependencias empaquetadas: pikepdf (MPL-2.0), qpdf (Apache-2.0),
+Resto de dependencias empaquetadas: pikepdf (MPL-2.0), certifi (MPL-2.0), qpdf (Apache-2.0),
 markdown-it-py y mdurl (MIT), Pillow (MIT-CMU), lxml (BSD-3-Clause), windnd (MIT,
 solo Windows) y el cargador de PyInstaller (GPL-2.0 con excepción que permite
 distribuir el ejecutable bajo cualquier licencia).
