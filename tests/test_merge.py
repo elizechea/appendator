@@ -113,3 +113,17 @@ def test_images_become_pages(tmp_path):
         assert span["size"] > 20  # el SVG (vectorial) sí se amplía: 12 pt → ~29 pt
         # El icono no se amplía: ocupa sus 40x60 px (30x45 pt), no la página entera.
         assert pymupdf.Rect(icono.get_image_info()[0]["bbox"]).width < 100
+
+
+def test_non_ascii_paths(tmp_path):
+    # Carpetas como C:\Users\Iñaki\Downloads: qpdf y MuPDF deben abrirlas en Windows.
+    folder = tmp_path / "Iñaki 日本"
+    folder.mkdir()
+    pdf = make_pdf(folder / "informe é.pdf", 1)
+    md = folder / "notas ü.md"
+    md.write_text("# Hola\n", "utf-8")
+    img = folder / "foto ñ.png"
+    pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 50, 50), False).save(img)
+    out = folder / "salida ç.pdf"
+    assert merge([pdf, md, img], out, Options(separators=True, compress=True)) == 6
+    assert "notas ü.md" in texts(out)[2]
