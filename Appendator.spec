@@ -5,7 +5,7 @@
 #   Linux   -> dist/Appendator (un único archivo)
 import sys
 
-VERSION = "1.2.0"
+VERSION = "1.1.1"
 IS_MAC = sys.platform == "darwin"
 IS_WIN = sys.platform == "win32"
 
